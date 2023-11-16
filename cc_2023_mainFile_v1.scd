@@ -1,5 +1,8 @@
 /*
 work on percussion sounds
+
+meer componeren met routines
+
 */
 /*
 frequentie op web sdr: 7074.72
@@ -8,20 +11,31 @@ frequentie op web sdr: 7074.72
 THIS ONE WORKS NOW:
 13659.72
 
-
-
 chinese radioL
 13600.15
 turkish radio:
 13633.86
+
+
+To do:
+controllers overzichtelijker. 1 minder?
+nanopad vervangen door monome?
+microtonale synth patch op monome voor Dragons a la minilogue
+monome microtonale tune switch
+monome rec sample buf switch
+----
+Spiral checken
+
+
+
 */
 (
 
 fork{
-Require("/home/numina/repos/chirp.crush_tour2023/cc_synthdefs_tunings.scd");
+Require("/home/numina/repos/chirp.crush_tour2023/cc_2023_synthdefs_tunings.scd");
 2.0.wait;
-	"./pulsejack".unixCmd;
-/*	"jack_connect SuperCollider:out_1 system:playback_1".unixCmd;
+/*	"./pulsejack".unixCmd;
+	"jack_connect SuperCollider:out_1 system:playback_1".unixCmd;
 	"jack_connect SuperCollider:out_2 system:playback_2".unixCmd;*/
 
 
@@ -32,6 +46,7 @@ MIDIIn.connectAll;
 	// Require("D:/Dropbox/PROJECTS/SC_performances/tenori-on/Ansage_Ende_01052021/animals_grainpatch_v5.scd");
 
 4.0.wait;
+//s.latency = nil;
 //stereo
 ~channels = Array.fill(16,{ 0});
 	//multichannel (to mixer)
@@ -118,13 +133,9 @@ MIDIIn.connectAll;
 ~combPerc = Synth(\perc_effect, [\in, ~percBus], ~percGroup, \addAfter);
 ~grainPerc = Synth(\grain_perc, [\in, ~percGrainBus, \envbuf, ~wenv], ~percGroup, \addAfter);
 
-
-
 ~combC = Synth(\tenoricomb, [\in, ~combBus,\mix,0.2,\out,~channels[3] ], ~effectGroup);
 
 
-/*	~tapecombC.set(\mix, 0.5);
-	~toycombC.set(\mix, 0.5);*/
 ~toycombC = Synth(\toycomb, [\in, ~toycombBus,\mix,0.5,\out,~channels[4] ], ~effectGroup);
 
 ~tapecombC = Synth(\tapecomb, [\in, ~tapecombBus,\mix,0.5,\out,~channels[5] ], ~effectGroup);
@@ -148,51 +159,10 @@ MIDIIn.connectAll;
 ~tenoriVolume = Synth(\ten_volume, [\in, ~tenvolBus,\volume,1], ~effectGroup2, \addAfter);
 
 //SAMPLES
-//~samplePath = "D:/Samples".asString;
-~samplePath = "/media/numina/Datapanic/Dropbox/Samples/".asString;
 
-~voicefiles = (~samplePath++"/Voice/saar/1.C/*.wav").pathMatch;
-~voice = ~voicefiles.collect({|i| Buffer.read(s, i); });
-~voiceFreqArray = Array.fill(8, { 261.63 });
-
-~analogfiles = (~samplePath++"/tenorion/analogkit/*.wav").pathMatch;
-~analog = ~analogfiles.collect({|i| Buffer.read(s, i); });
-
-~snarefiles = (~samplePath++"/tenorion/snaredrums/*.WAV").pathMatch;
-~snares = ~snarefiles.collect({|i| Buffer.read(s, i); });
-
-~kickfiles = (~samplePath++"/tenorion/kicks/*.aif").pathMatch;
-~kicks = ~kickfiles.collect({|i| Buffer.read(s, i); });
-
-~cymbalFiles = (~samplePath++"/tenorion/cymbals/*.WAV").pathMatch;
-~cymbals = ~cymbalFiles.collect({|i| Buffer.read(s, i); });
-
-~perc_files = (Platform.resourceDir +/+ "sounds/Percussion/*.aif").pathMatch;
-~percSamples1 = ~perc_files.collect({|i| Buffer.read(s, i); });
-
-~harpsifiles = (~samplePath++"/tenorion/*.wav").pathMatch;
-~harpsi = ~harpsifiles.collect({|i| Buffer.read(s, i); });
-
-~lutefiles = (~samplePath++"/tenorion/lute/*.wav").pathMatch;
-~lute = ~lutefiles.collect({|i| Buffer.read(s, i); });
-
-
-~droneFiles = (~samplePath++"/tenorion/drones/*.aif").pathMatch;
-~drones = ~droneFiles.collect({|i| Buffer.read(s, i); });
-~dronePitchBuses = Array.fill(~drones.size, { Bus.control(s, 1); });
-~droneFreqArray = Array.fill(~drones.size, { 0 });
-
-
-fork{
-~drones.size.do{|i|
-	Synth(\pitchFinder, [\bufnum,~drones[i],\outBus, ~dronePitchBuses[i],\dur,1]);  };
-1.0.wait;
-~drones.size.do{|i|
-		~dronePitchBuses[i].get({|item| ~droneFreqArray.put(i, item); }); };  };
 
 /* AMBIENT FILES */
-~ambientpath = "/media/numina/Datapanic/Dropbox/PROJECTS/SC_performances/tenori-on/Ansage_Ende_01052021/AE_Samples/";
-
+~ambientpath = "/home/numina/repos/chirp.crush_tour2023/AE_Samples/";
 ~ambientfiles = (~ambientpath++"*.wav").pathMatch;
 //~ambients = ~ambientfiles.collect({|i| Buffer.read(s, i); });
 
@@ -236,27 +206,6 @@ fork{
 ~ambientsRight.size.do{|i|
 		~malmPitchBuses[i].get({|item| ~malmFreqArray.put(i, item); }); };  };
 
-
-~toneFiles = (~samplePath++"/tenorion/strangetones/*.wav").pathMatch;
-~strangeTones = ~toneFiles.collect({|i| Buffer.read(s, i); });
-
-~microFiles = (~samplePath++"/tenorion/microsounds/*.aiff").pathMatch;
-~microsounds = ~microFiles.collect({|i| Buffer.read(s, i); });
-
-~slenFiles = (~samplePath++"/micromoog/*.wav").pathMatch;
-~slentem = ~slenFiles.collect({|i| Buffer.read(s, i); });
-~slentemPitchBuses = Array.fill(~slentem.size, { Bus.control(s, 1); });
-~slentemFreqArray = Array.fill(~slentem.size, { 0 });
-
-//freq finder function
-fork{
-~slentem.size.do{|i|
-	Synth(\pitchFinder, [\bufnum,~slentem[i],\outBus, ~slentemPitchBuses[i],\dur,1]);
- };
-2.0.wait;
-~slentem.size.do{|i|
-		~slentemPitchBuses[i].get({|item| ~slentemFreqArray.put(i, item); }); };
-};
 
 /* BUFFERS for recording */
 ~recBufs = [Buffer.alloc(s, s.sampleRate*2,1), Buffer.alloc(s, s.sampleRate*2,1)];
@@ -341,7 +290,30 @@ Require("/home/numina/repos/chirp.crush_tour2023/cc_2023_grains.scd");
 4.0.wait;
 Require("/home/numina/repos/chirp.crush_tour2023/cc_2023_extreme3d.scd");
 2.0.wait;
+Require("/home/numina/repos/chirp.crush_tour2023/cc_2023_monome.scd");
+2.0.wait;
 
+
+
+
+	~fcricket_trigBus = Bus.control(s, 1).set(58.82);
+	~cicada_trigBus = Bus.control(s, 1).set(0.2);
+
+	~percReleaseBus = Bus.control(s, 1).set(0.001);
+
+
+	~phasemIndexBus = Bus.control(s, 1).set(0);
+	~phaseModFreq = Bus.control(s, 1).set(8);
+
+	~phasemIndexSpec = [0.01, 1000.0, \linear, 0.01].asSpec;
+	~freqRange = [100, 800, \linear, 10].asSpec;
+	~releaseRange = [0.1,1.0, 5, 0.001].asSpec;
+	~relmulSpec = [1.0, 10.0, \exp, 0.001].asSpec;
+
+	~fcrickets_trigSpec = [58.82, 400.0, \linear, 0.01].asSpec;
+	~cicada_trigSpec = [0.001, 80.0, \linear, 0.01].asSpec;
+
+	~relMul = 1;
 
 
 /*fade in sdr */
@@ -370,36 +342,6 @@ Ndef(\sdr, {
 	{ num == 57 } { ~combPerc.set(\decay, ~decRange.map(val/127);  ); };
 
 });
-
-
-
-
-
-	~fcricket_trigBus = Bus.control(s, 1).set(58.82);
-	~cicada_trigBus = Bus.control(s, 1).set(0.2);
-
-	~percReleaseBus = Bus.control(s, 1).set(0.001);
-
-
-	~phasemIndexBus = Bus.control(s, 1).set(0);
-	~phaseModFreq = Bus.control(s, 1).set(8);
-
-	~phasemIndexSpec = [0.01, 1000.0, \linear, 0.01].asSpec;
-	~freqRange = [100, 800, \linear, 10].asSpec;
-	~releaseRange = [0.1,1.0, 5, 0.001].asSpec;
-	~relmulSpec = [1.0, 10.0, \exp, 0.001].asSpec;
-
-	~fcrickets_trigSpec = [58.82, 400.0, \linear, 0.01].asSpec;
-	~cicada_trigSpec = [0.001, 80.0, \linear, 0.01].asSpec;
-
-	~relMul = 1;
-
-
-
-
-
-
-
 
 MIDIdef.cc(\secondController, {|val, num, cc, chan|
 		[val, num, cc, chan].postln;

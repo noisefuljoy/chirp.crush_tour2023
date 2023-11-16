@@ -1,3 +1,6 @@
+//NetAddr.langPort
+
+
 fork{
 
 (
@@ -233,9 +236,10 @@ SynthDef(\fm7, {|out=0 amp=0.4 mod1=0, mod2=0, mod3=0, mod4=0 gate=1|
     ];
     chans = [0, 1];
     sig = FM7.ar(ctls, mods).slice(chans) * -12.dbamp; // using "slice" to select specific channels
-	sig = CombC.ar(sig, 0.1, LFNoise2.kr(1.8).range(0.001,0.1),SinOsc.kr(LFNoise2.kr(0.4).range(0.001,0.5)).range(0.1,8.0),0.5,sig*0.5);
+			sig = Mix(sig);
+	sig = CombC.ar(sig, 0.1, LFNoise2.kr(1.8).range(0.001,0.1),LFNoise2.kr(0.4).range(0.1,8.0),0.125,sig*0.875);
 	//sig = FreeVerb2.ar(sig[0],sig[1], 0.4, 0.7,0.8);
-	Out.ar(out, sig*env*amp);
+	Out.ar(out, sig*env*amp!2);
 }).store;
 
  SynthDef(\fmseven, {|out=0 amp=0.25 gate=1 mod1=1 mod2=1 mod3=1 mod4=1|
@@ -279,7 +283,7 @@ SynthDef(\magic_drone,{|out=0 amp=1.0 gate=1 ratio=1|
 ~winenv = Env([0, 1, 0], [0.5, 0.5], [8, -8]);
 ~window = Buffer.sendCollection(s, ~winenv.discretize, 1);
 
-SynthDef(\field_grain, { |out=0, gate = 1, amp = 1,posBus,bufnum, envbuf, trateBus durBus|
+SynthDef(\field_grain, { |out=0, gate = 1, amp = 0.4,posBus,bufnum, envbuf, trateBus durBus|
     var sig,sig1,sig2, pan, env, freqdev,trate, dur, pos;
 			trate = In.kr(trateBus, 1);
 			dur = In.kr(durBus, 1);
@@ -295,20 +299,20 @@ SynthDef(\field_grain, { |out=0, gate = 1, amp = 1,posBus,bufnum, envbuf, trateB
 				pos * BufFrames.kr(bufnum), 2, FSinOsc.kr(LFNoise0.kr(0.2).range(0.01,80.0)).range(-0.1,0.1), envbuf);
 
 			*/
-		sig = GrainBuf.ar(2, Impulse.kr(trate), trate.reciprocal * dur, bufnum, 1,
+		sig = GrainBuf.ar(1, Impulse.kr(trate), trate.reciprocal * dur, bufnum, 1,
 				 BufFrames.ir(bufnum) * pos, 2, envbuf);
 
 			//sig1 = PitchShift.ar(sig[0], 0.4,0.1, 0.2, 0.4, 0.5, sig[0]*0.5) * env;
 			//sig2 = PitchShift.ar(sig[1], 0.4, 0.125, 0.2, 0.4, 0.5, sig[1]*0.5) * env;
 
 
-			Out.ar(out, sig*amp*env);
+			Out.ar(out, Pan2.ar(sig*amp*env,FSinOsc.kr(LFNoise0.kr(0.2).range(0.01,80.0)).range(-0.4,0.1)));
 }).store;
 
 
 ~nyquist = s.sampleRate * 0.5;
 
-~modRange = [0.1, 9, \exp, 0.001].asSpec;
+~modRange = [9.0, 0.001, \exp, 0.001].asSpec;
 ~ampRange = [0.25, 1.0, \linear, 0.001].asSpec;
 ~relRange = [0.1, 2.0, \linear, 0.001].asSpec;
 ~decRange = [0.001, 30.0, \exp, 0.001].asSpec;
@@ -516,84 +520,13 @@ OSCdef(\btn_6, {|msg, time, addr, recvPort|
 
 }, '/btn_6', nil);
 
-/*
-HIDdef.usage( \button_1, { |value|
-
-	if ( value == 0, {
-	if ( ~fmSwitch != 1, { ~fmSwitch = ~fmSwitch + 1; },
-		{
-			~fmSwitch = 0;
-
-	});
-	("fm synth : "++~fmSwitch).postln;
-
-	});
-
-}, \b1 );
-
-
-/* synth trigger */
-HIDdef.usage( \main_but_1, { |value|
-	if ( ~freezeSwitch == 0, {
-		if ( value == 1, {
-
-			case
-			{ ~fmSwitch == 0 }
-			{
-
-				Synth(\fm7, [\gate,1], ~fm1Group); }
-			{ ~fmSwitch == 1 }
-			{
-				Synth(\fmseven, [\gate,1], ~fm1Group);
-
-			};
-
-
-		}, { ~fm1Group.set(\gate, 0);  });
-
-		});
-
-
-	}, \b5 );
-*/
-/* freeze button */
-
-/*
-HIDdef.usage( \main_but_2, { |value|
-	if ( value == 1, {
-		if ( ~freezeSwitch == 0, { ~freezeSwitch = 1; "frozen".postln; }, { ~freezeSwitch = 0; "unfrozen".postln; });
-	});
-}, \b6 );
-*/
-/*
-HIDdef.usage( \main_but_3, { |value|
-	if ( value == 1, {
-		if ( ~fieldrecSwitch == 0, { "play field rec".postln;
-			Synth(\field_grain, [\gate,1,\bufnum,~sdr_rec_buf, \envbuf, ~window, \trateBus, ~fr_trateBus.index, \durBus, ~fr_durBus.index, \posBus, ~fr_posBus.index
-					], ~fieldrecGroup);
-			~fieldrecSwitch = 1;
-
-		},
-		{  "stop field rec".postln; ~fieldrecGroup.set(\gate, 0);  ~fieldrecSwitch = 0; });
-	});
-	 }, \b7 );
-
-
-HIDdef.usage( \main_but_4, { |value|
-	if ( value == 1, {
-		if ( ~fieldrecnum == (~field_recs.size-1), { ~fieldrecnum = 0; }, { ~fieldrecnum = ~fieldrecnum + 1; });
-		"fieldrec sample: "++~fieldrecnum.postln;
-		  });
-
-	}, \b8 );
-*/
 	~fr_trateBus = Bus.control(s, 1).set(1);
 	~fr_durBus = Bus.control(s, 1).set(1.0);
 	~fr_posBus = Bus.control(s, 1).set(0.0);
 
 
-	~fr_trateRange = [0.1, 250, 4,0.001].asSpec;
-	~fr_durRange = [3.0, 0.75, 1,0.001].asSpec;
+	~fr_trateRange = [1.5, 250, 4,0.001].asSpec;
+	~fr_durRange = [5.0, 0.5, 1,0.001].asSpec;
 	~fr_posRange = [0.0, 0.9, \linear,0.001].asSpec;
 
 OSCdef(\abs_x, {|msg, time, addr, recvPort|
@@ -601,7 +534,7 @@ OSCdef(\abs_x, {|msg, time, addr, recvPort|
 
 	if ( ~freezeSwitch == 0, {
 		~fmGroup.set(\mod1, ~modRange.map(value));
-		~fr_durBus.set(~fr_durRange.map(value));
+		~fr_posBus.set(~fr_posRange.map(value).postln; );
 	});
 
 }, '/abs_x', nil);
@@ -633,8 +566,10 @@ OSCdef(\abs_rz, {|msg, time, addr, recvPort|
 OSCdef(\abs_throttle, {|msg, time, addr, recvPort|
 	var value = (msg[1]/255);
 
-	~fmGroup.set(\mod4, ~modRange.map(value));
-			~fr_posBus.set(~fr_posRange.map(value).postln; );
+	~fmGroup.set(\mod4, ~modRange.map(value).postln;);
+
+	~fr_durBus.set(~fr_durRange.map(value));
+
 	}, '/abs_throttle', nil);
 
 

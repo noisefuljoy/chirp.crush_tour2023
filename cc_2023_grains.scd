@@ -1,13 +1,9 @@
 /*
 ordenen
-
 granulaire patch checken
 ritmische klanken aan nanopad
 opties voor gamepad
-
 frequentie op web sdr: 7074.72
-
-
 */
 
 (
@@ -157,8 +153,6 @@ SynthDef(\pumper, {|in out amp=0.5|
 ~bike0smpls = Array.fill(2, { Buffer.alloc(s, 1.0 * s.sampleRate, 1); });
 ~bike1smpls = Array.fill(2, { Buffer.alloc(s, 1.0 * s.sampleRate, 1); });
 
-~samplePath2 = "/media/numina/DATAPANIC/Dropbox/Samples/AnsageEnde/".asString;
-~testSample = Buffer.read(s, ~samplePath2++"/Gamelan/Slentem/SlentemPl1.wav" );
 ~win1 = Buffer.sendCollection(s, Signal.hammingWindow(1024));
 
 ~samNum1 = 0;
@@ -168,10 +162,6 @@ SynthDef(\pumper, {|in out amp=0.5|
 ~recrecBufs = Array.fill(2, { Buffer.alloc(s, s.sampleRate * 10, 1); });
 
 //samples
-
-~frogs_long = Buffer.read(s, (~samplePath2++"/boerderij/kikkers/lang/kikkers_lang_1.wav"));
-~bijen = Buffer.read(s, (~samplePath2++"/boerderij/bijen/bijen_01.wav") );
-
 ~firstgeneration_grainsample1 =  {  ~bike0smpls[~samNum1];      };
 ~firstgeneration_grainsample2 = 	 { ~bike1smpls[~samNum2] ;      };
 
