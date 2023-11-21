@@ -1,8 +1,12 @@
 /*
+knop om monome ritmes plotseling superkort te maken en er dan langere synth klanken overheen te leggen
+elektromagnetische kick
+
+Server.default.makeGui
+
 make the ensemble aleatoric
 https://www.youtube.com/watch?v=jkuHFoWPJug&t=1191s
 routines gebruiken binnen
-
 
 
 different scenes
@@ -29,6 +33,11 @@ tuning switcher
 
 fork{
 
+	/* CHECK THIS ONE */
+~footpedal_srcid = 8454144;
+
+
+
 
 ~radio_files = "/home/numina/repos/electromagnetic_sensibility/Radio/*.wav".pathMatch;
 ~radio_samples = ~radio_files.collect{|i| Buffer.read(s, i); };
@@ -36,6 +45,64 @@ fork{
 // SynthDef shared by all voices:
 
 b = Buffer.sendCollection(s, { 1.0.rand }!1024);
+
+/*
+SynthDef(\minilogue, {|out=0 amp=0.25 freq=440 dur=0.25 rel=0.1 widthMod=0.01 res=0.1 gate=1|
+	var env,filtEnv,sig,fm_mod1,fm_mod2,fm_mod3;
+	//gate = EnvGen.kr(Env([1,0],[dur+rel],1));
+	env = EnvGen.ar(Env.adsr(dur/4,dur/8,0.5,rel),gate,doneAction:2);
+
+	fm_mod1 = SinOsc.ar(freq * (4/3) ) * freq * Rand(1,5);
+	fm_mod2 = SinOsc.ar(freq * (5/4) ) * freq * Rand(1,15);.
+	fm_mod3 = SinOsc.ar(freq * (2/1) ) * freq * Rand(1,20);
+
+	sig = Mix(Pulse.ar([(freq*0.499)+fm_mod1,freq+fm_mod2,(freq*2.02)+fm_mod3],LFNoise2.kr(widthMod).range(0.1,0.95),0.33));
+	filtEnv = EnvGen.ar(Env.adsr(dur/2,dur/3,0.5,rel*0.75),gate,doneAction:0);
+	sig = MoogVCF.ar(sig, Rand(1000,8000)*filtEnv, res,3);
+	Out.ar(out, sig*amp*env) }).add;
+*/
+
+SynthDef(\minilogue, {|out amp=0.0 gate=1 gate2=1 freq=110 index=0.1|
+		var t_env,env, modfreq,sig;
+		t_env = EnvGen.kr(Env.adsr(0.001,0.0,1,0.00001),gate2);
+		env = EnvGen.ar(Env.adsr(0.001,0.0,1,Rand(0.01,0.4)),gate,doneAction: 2);
+		modfreq = SinOsc.ar(freq*(4/3)) * freq * index;
+		sig = SinOsc.ar(freq+modfreq, 0, 0.25);
+		//sig = VarSaw.ar(freq+modfreq, 0,0.9, 0.1);
+		sig = Gate.ar(sig, gate2);
+		sig = HPF.ar(sig * env, freq: freq * 0.5);
+		Out.ar(out, sig*amp); }).store;
+
+
+
+/*
+SynthDef(\mini_delay, {|in deltime amp=1 decay=5 out|
+		var drysig, sig;
+		sig = In.ar(in, 1);
+		drysig = sig;
+		3.do{|i|
+			d = 0.01 + 0.2.rand;
+			sig = AllpassC.ar(sig, d, d, decay+(i+1), 2, sig*0.9); };
+		sig = (drysig*0.1) + (sig * 1);
+		Out.ar(out, Pan2.ar(sig*amp,0)); }).store;
+*/
+SynthDef(\mini_delay, {|in out=0 delmod=0.001 dec=8 mix=0.25|
+		var sig,delsig;
+		sig = In.ar(in, 1);
+
+		delsig = sig;
+		3.do{|i|
+			n = (i + 1) * 0.1;
+			o = (i + 1) * 0.01;
+			e = (i + 1) * 0.1;
+
+			delsig = AllpassC.ar(sig, 0.2, SinOsc.kr(delmod+o).range(0.01, n), e + dec, 0.3, delsig*0.7);
+		};
+
+		sig = (delsig * mix) + (sig * ( 1 - mix) );
+
+		//sig = LPF.ar(sig, 800);
+		Out.ar(out, sig!2 ); }).add;
 
 SynthDef(\radiograin, { |envbuf bufnum freq = 440, amp = 0.75, t_trig = 0, decay, rate=1|
 
@@ -54,9 +121,21 @@ SynthDef(\radiograin, { |envbuf bufnum freq = 440, amp = 0.75, t_trig = 0, decay
 // instantiate a grid variable:
 ~flinGrid = MonomeGrid.new(prefix: "/flin", fps: 60);
 //~secondGrid = MonomeGrid.new(prefix: "/second", fps: 60);
-
+//~effect_group.freeAll
 
 MIDIIn.connectAll;
+~maingroup = Group.new;
+~effect_group = Group.after(~maingroup);
+~monome_synth_group = Array.fill(128, { Group.new(~maingroup); });
+~monome_synth_arr = Array.fill(128, { nil } );
+~monome_synth_gates = Array.fill(128, { 0 });
+~rhythmic_gate = 0;
+
+~index_spec = [0.1, 100.0,\exp,0.001].asSpec;
+
+
+~mini_delay_bus = Bus.audio(s, 1);
+	Synth(\mini_delay,[\in, ~mini_delay_bus], ~effect_group);
 
 ~rec_synths = Array.fill(8, { 0 });
 ~fft_bufs = Array.fill(8, { Buffer.alloc(s, 512);    });
@@ -94,6 +173,50 @@ Ndef(\tempo_mod, {
 
 
 
+~rateState = 0;
+
+/* tones and tunings */
+
+~newScale = Scale.new(#[0,1,3,4,5,8,9,10,11,13,14,15,18,19,20,21,22,24,26,27,28,30,31,33,35,36,37,39,41,42,44,46,47],48,name: "quarter-tone");
+
+~quarter =
+Array.fill(256, {|i|
+	var octave = i / 33;
+	var sc = ~newScale;
+	case
+	{ octave < 1; } { sc.semitones.wrapAt(i) }
+	{ ((octave == 1) or: (octave > 1)) and: (octave < 2) } { sc.semitones.wrapAt(i) + 12 }
+	{ ((octave == 2) or: (octave > 2)) and: (octave < 3)  } { sc.semitones.wrapAt(i) + 24 }
+	{ ((octave == 3) or: (octave > 3)) and: (octave < 4)  } { sc.semitones.wrapAt(i) + 36 }
+	{ ((octave == 4) or: (octave > 4)) and: (octave < 5)  } { sc.semitones.wrapAt(i) + 48 }
+	{ ((octave == 5) or: (octave > 5)) and: (octave < 6)  } { sc.semitones.wrapAt(i) + 50 }
+	{ ((octave == 6) or: (octave > 6)) and: (octave < 7)  } { sc.semitones.wrapAt(i) + 62 }
+	{ ((octave == 7) or: (octave > 7)) and: (octave < 8)  } { sc.semitones.wrapAt(i) + 74 }
+	{ ((octave == 8) or: (octave > 8)) and: (octave < 9)  } { sc.semitones.wrapAt(i) + 86 }
+	{ ((octave == 9) or: (octave > 9)) and: (octave < 10)  } { sc.semitones.wrapAt(i) + 98 }
+	{ ((octave == 10) or: (octave > 10)) and: (octave < 11)  } { sc.semitones.wrapAt(i) + 110 }
+	{ ((octave == 11) or: (octave > 11)) } { sc.semitones.wrapAt(i) +  [0,12,24,36,48,50,62,74].choose  }
+});
+
+
+~partchO = Scale.partch_o1(\partch);
+
+
+~otonratios =
+	Array.fill(16, {|i|
+	var oct = i / 5;
+	var mod = ( i % 5);
+	//mod.postln;
+	case
+	{ oct < 1 } {  0  + (~partchO.ratios[mod]); }
+	{ oct < 2 } { (~partchO.ratios[5]*2) + (~partchO.ratios[mod]); }
+	{ oct < 3 } { (~partchO.ratios[5]*4) + (~partchO.ratios[mod]) }
+	//{ oct < 4 } {  0 + ~partchO[j].ratios[mod] }
+	{ oct < 4 } { (~partchO.ratios[5]*8) + ~partchO.ratios[mod]; }
+	{ oct < 5 } {  (~partchO.ratios[5]* 16) + ~partchO.ratios[mod] };
+});
+
+	~footPedalMode = 0;
 
 (
 MIDIdef.cc(\nanokontrol, {|val num chan src|
@@ -192,6 +315,14 @@ MIDIdef.cc(\nanokontrol, {|val num chan src|
 
 
 		}
+	//stop synth
+	{ num == 102 }
+	{
+				~maingroup.set(\gate, 0);
+				~monome_synth_arr.do{|i, item| ~monome_synth_arr.put(item, nil); };
+				~monome_synth_gates.do{|i, item| ~monome_synth_gates.put(item, 0); };
+
+			}
 	{ num == 103 }
 	{
 		if ( val == 127, {
@@ -216,6 +347,49 @@ MIDIdef.cc(\nanokontrol, {|val num chan src|
 		});
 
 	}
+	{ num == 104 }
+	{
+
+
+				if ( ~footPedalMode != 1, { ~footPedalMode = ~footPedalMode + 1; }, { ~footPedalMode = 0; });
+
+
+				case
+				{ ~footPedalMode == 0 }
+				{
+					MIDIdef.cc(\BOSS_footpedal, {|val num chan src|
+
+						//~maingroup.set(\index, ~index_spec.map(val/127));
+
+						~bpm = ~tempo_spec.map(val/127).postln;
+						~linkClock.tempo = ~bpm/60;
+						[num,val,chan, src].postln;
+
+
+					},srcID:~footpedal_srcid);
+
+				}
+				{ ~footPedalMode == 1 }
+				{
+
+					"no tempo footpedal".postln;
+					MIDIdef.cc(\BOSS_footpedal, {|val num chan src|
+
+						~maingroup.set(\index, ~index_spec.map(val/127));
+
+						//~bpm = ~tempo_spec.map(val/127).postln;
+						//~linkClock.tempo = ~bpm/60;
+						[num,val,chan, src].postln;
+
+
+					},srcID:~footpedal_srcid);
+
+
+				};
+
+				("footpedal mode : "++~footPedalMode).postln;
+
+			}
 	{ num == 105 }
 	{
 
@@ -230,15 +404,55 @@ MIDIdef.cc(\nanokontrol, {|val num chan src|
 
 				}
 				{ ~monomeScene == 1 }
+
+
+
 				{
-					~flinGrid.all(5);
+					Task({ 0.1.wait;
+						~flinGrid.all(1);
+						0.05.wait;
+						~monome_synth_arr.do{|item, i| var column, row; [i, item].postln;
+						if ( item != nil, {
+								column = i%16;
+								row = (i/16).floor;
+								~flinGrid.led(column,row,15);
+
+
+
+							});
+
+						};
+					}).start;
 
 
 				};
 
 				("monome scene : "++~monomeScene).postln;
 
+			}
+	{ num == 107 }
+	{
+				if ( ~rateState != 2, { ~rateState = ~rateState + 1; }, {   ~rateState = 0; });
+				("rate state : "++~rateState).postln;
+
+			}
+	{ num == 108 }
+	{
+		if ( val == 127, {
+
+
+					~rhythmic_gate = 1; "rhythmic gate open".postln;
+
+
+				}, {
+					~rhythmic_gate = 0;
+
+					"rhythmic gate closed".postln;
+
+				});
+
 			};
+
 
 }, chan: 2);
 	);
@@ -282,15 +496,8 @@ s.waitForBoot({
 
 	~flinGrid.connect();
 
-	MIDIdef.cc(\BOSS_footpedal, {|val num chan src|
 
 
-	~bpm = ~tempo_spec.map(val/127).postln;
-	~linkClock.tempo = ~bpm/60;
-	[num,val,chan, src].postln;
-
-
-    },srcID:8388608);
 
 	// build grid UI from connected grid measurements:
 	positions = Array.fill(~flinGrid.cols, {-1});
@@ -335,6 +542,10 @@ s.waitForBoot({
 	};
 
 	~flinGrid.key({ arg x,y,z;
+			var synthNum = x+(16*y);
+			[x,y,z].postln;
+			("coordinate : "++synthNum).postln;
+
 
 		case { ~monomeScene == 0 }
 			{
@@ -365,7 +576,32 @@ s.waitForBoot({
 			}
 			{ ~monomeScene == 1 }
 			{
-				"other scene".postln;
+				if(z == 1, {
+
+					if ( ~monome_synth_arr[synthNum] == nil, {
+						"play synth".postln;
+
+					~monome_synth_arr.put(synthNum,
+							Synth(\minilogue, [\amp,0.1,\freq, ~quarter[(synthNum-1)+128].midicps,\out, ~mini_delay_bus ], ~monome_synth_group[synthNum-1]); );
+
+						("synth num trigged"++synthNum).postln;
+					~flinGrid.led(x,y,15);
+					},
+					{	"stop synth".postln;
+						~monome_synth_arr[synthNum].set(\gate, 0);
+						~monome_synth_arr.put(synthNum, nil);
+
+						~flinGrid.led(x,y,0);
+
+					});
+
+
+
+
+
+
+				});
+
 
 			};
 
@@ -393,6 +629,7 @@ s.waitForBoot({
 						});
 					};
 
+
 					// playhead:
 					if((~flinGrid.rows == 16 && (speeds[i1] != 15)) || (~flinGrid.rows == 8 && (speeds[i1] != 7)),{
 						var onGridPos = positions[i1]-1;
@@ -408,6 +645,8 @@ s.waitForBoot({
 							});
 						});
 					});
+
+
 				};
 				dirtyGrid = 0;
 			});
@@ -416,7 +655,7 @@ s.waitForBoot({
 			}
 				{ ~monomeScene == 1 }
 				{
-					"not drawing anymore".postln;
+					//"not drawing anymore".postln;
 
 				};
 			interval.yield;
@@ -442,10 +681,39 @@ s.waitForBoot({
 							if(positions[i] == 0, {
 								var sIM = stepInterval * stepMultiplier;
 								var duration = (((widths[i] + speeds[i]) * sIM) * (1/sIM)).clip(sIM,inf);
+								var rate;
+										case
+										{ ~rateState == 0 } { rate = 1; }
+										{ ~rateState == 1 } { rate = (notes[i] + base_note).midicps/440; }
+										{ ~rateState == 2 } { rate = ~otonratios[i]; };
 								//~voices[i].set(\decay, duration);
 								//~voices[i].set(\t_trig,1);
 								Synth(\radiograin, [\envbuf, b,
-								\bufnum, ~radio_samples[~radiosample_choose],\decay, duration*~overlap], ~grain_groups[i]);
+								\bufnum, ~radio_samples[~radiosample_choose],
+											\rate, rate,
+											\decay, duration*~overlap], ~grain_groups[i]);
+									if ( ~rhythmic_gate == 1,  {
+
+											Task({
+
+												~monome_synth_arr.do{|i, item|
+													//[i, item].postln;
+													if ( i != nil, {
+														if ( ~monome_synth_gates[item] == 0, {
+															     ~monome_synth_arr[item].set(\gate2, 0);
+															~monome_synth_gates.put(item, 1);
+															"gating synth".postln;
+														}, {
+															  ~monome_synth_arr[item].set(\gate2, 1);
+															~monome_synth_gates.put(item, 0);
+															"ungating synth".postln;
+														});
+													});
+														};
+
+										}).start;
+										});
+
 
 							},{
 								if((positions[i] - widths[i]) == 1,{
@@ -465,7 +733,8 @@ s.waitForBoot({
 		}
 
 				{ ~monomeScene == 1 }
-			{ "not playing".postln;
+			{
+					//"not playing".postln;
 
 			0.1.wait;
 				};
@@ -492,144 +761,21 @@ s.waitForBoot({
 		}
 	}.play(~linkClock, quant: 1);
 
-/*
-	// GUI:
-	w = Window.new(
-		name: "flin params",
-		bounds: Rect(0,600,520,400)
-	).front;
-	w.view.decorator=FlowLayout(w.view.bounds);
-	w.view.decorator.gap=2@2;
 
-	for(0,15){
-		arg i;
-		EZSlider(w, 30@300, " n" + i,
-			controlSpec: ControlSpec.new(minval: 0, maxval: 48, warp: 'lin', step: 1, default: notes[i]),
-			action: { arg slider;
-				notes[i] = slider.value.asInteger;
-				~voices[i].set(\freq, (notes[i] + base_note).midicps)
-			},
-			labelWidth: 70, numberWidth:60, layout:\vert, margin:1@0)
-		.setColors(Color.grey,Color.white)
-		.font_(Font("Open Sans",11));
-	};
 
-	w.view.decorator.nextLine;
 
-	EZSlider(w,300@10).visible = false;
+	//footpedal
 
-	w.view.decorator.nextLine;
+	MIDIdef.cc(\BOSS_footpedal, {|val num chan src|
 
-	EZNumber(w, 100@20, "transpose",
-		controlSpec: ControlSpec.new(minval: 0, maxval: 128, warp: 'lin', step: 1, default: base_note),
-		action: { arg number;
-			base_note = number.value.asInteger;
-			for(0,15){
-				arg i;
-				~voices[i].set(\freq, (notes[i] + base_note).midicps)
-			};
-		},
-		labelWidth: 60, numberWidth:35)
-	.font_(Font("Open Sans",11));
+	//~maingroup.set(\index, ~index_spec.map(val/127));
 
-	Button(w, 18 @ 20).visible = false;
+	~bpm = ~tempo_spec.map(val/127).postln;
+	~linkClock.tempo = ~bpm/60;
+	[num,val,chan, src].postln;
 
-	linkStartStop = Button(w, 100 @ 20);
-	linkStartStop.states = [
-		["ext start/stop", Color.white, Color.blue(0.7)],
-		["int start/stop", Color.black, Color.yellow(0.7)]
-	];
-	linkStartStop.action = {arg view;
-		if (view.value == 1,{
-			startButton.visible = true;
-			quantGUI.visible = true;
-		},{
-			startButton.visible = false;
-			quantGUI.visible = false;
-		});
-	};
 
-	Button(w, 20 @ 20).visible = false;
-
-	startButton = Button(w, 60 @ 20);
-	startButton.states = [
-		["Start", Color.black, Color.green(0.7)],
-		["Stop", Color.white, Color.red(0.7)]
-	];
-	startButton.action = {|view|
-		toggleTransport.value(view.value);
-	};
-	startButton.visible = false;
-
-	quantGUI = PopUpMenu(w, Rect(10, 10, 130, 20))
-	.items_([
-		"launch quant: 1 bar",
-		"launch quant: 1/4",
-		"launch quant: 1/8",
-		"launch quant: 1/16",
-		"launch quant: none"
-	]).font_(Font("Open Sans",11));
-
-	quantGUI.action = { arg menu;
-		launchQuant = launchQuants[menu.value];
-	};
-
-	quantGUI.visible = false;
-
-	transportGUI = Routine {
-		var bars, beats;
-		loop {
-			bars = ~linkClock.bar;
-			beats = ~linkClock.beatInBar;
-			{
-				barsBox.value = bars;
-				beatsBox.value = beats+1;
-			}.defer(~linkClock.latency);
-			1.0.wait;
-		}
-	}.play(~linkClock, quant: 1);
-
-	w.view.decorator.nextLine;
-
-	EZNumber(w,100@20, "length",
-		controlSpec: ControlSpec.new(minval: 8, maxval: 128, warp: 'lin', step: 1, default: length),
-		action: { arg number;
-			length = number.value.asInteger;
-		},
-		layout:\horz,
-	)
-	.font_(Font("Open Sans",11));
-
-	tempoGUI = EZNumber(w,110@20, "BPM",
-		controlSpec: ControlSpec.new(minval: 1, maxval: 800, warp: 'lin', step: 1/100, default: ~bpm),
-		action: { arg number;
-			~bpm = number.value;
-			~linkClock.tempo = ~bpm/60;
-		},
-		layout:\horz,
-	).font_(Font("Open Sans",11));
-
-	StaticText(w,35@20).font_(Font("Open Sans",11)).string = "  bars";
-	barsBox = NumberBox(w,40@20).font_(Font("Open Sans",11));
-	StaticText(w,42@20).font_(Font("Open Sans",11)).string = "  beats";
-	beatsBox = NumberBox(w,30@20).font_(Font("Open Sans",11));
-
-	w.view.decorator.nextLine;
-
-	EZNumber(w,100@20, "mult",
-		controlSpec: ControlSpec.new(minval: 1, maxval: 32, warp: 'lin', step: 1, default: stepMultiplier),
-		action: { arg number;
-			stepMultiplier = number.value.asInteger;
-		},
-		layout:\horz,
-	)
-	.font_(Font("Open Sans",11));
-
-	// set defaults:
-	linkStartStop.valueAction = 2; // internal clock
-	quantGUI.valueAction = 4; // no launch quantization
-*/
-
+    },srcID:~footpedal_srcid);
 
 
 });

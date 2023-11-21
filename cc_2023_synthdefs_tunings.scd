@@ -395,6 +395,95 @@ SynthDef(\ten_perc_effect, {|out=0 in maxdel mix=0.1 srate=32000 ffreq=3000|
 	sig = FreeVerb.ar(dry,0.1,0.8,0.25);
 	Out.ar(out, sig!2 )}).store;
 
+SynthDef(\fieldcricket, {|out=0 recout=100 tfreqBus gate=1 amp=1|
+	var tfreq, env, trig, seq, demand, cricket;
+	tfreq = In.kr(tfreqBus, 1);
+	env = EnvGen.ar(Env.adsr(15,0.0,1,15),gate, doneAction: 2);
+
+	// instead of [metro], Impulse.kr is used here. Delta t = 17 ms equates to 58.82 Hz.
+	trig = Impulse.kr(tfreq);
+
+	// the main idea of the following line was to use an approach
+	// that uses the same coefficients as described in the pd patch
+	seq = Dseq(Array.fill(41, {|i| if(i<7, {(i+2)/9},{0}) }),inf);
+	demand = Demand.kr(trig,0,seq);
+
+	// Implementation of the pd code for pulses including amplitude grow:
+	// cricket = EnvGen.ar(Env.new([0, 1, 1, 0], [0.0001, 0.0001, 0]), trig) * demand;
+
+	// 2nd implementation: pure data seemed to slightly disobey its own specifications,
+	// so I analysed the waveform and came up with this:
+	cricket = EnvGen.ar(Env.new([0, 1, 0], [4/44100, 0]), trig) * demand;
+
+
+	cricket = OnePole.ar(cricket, exp(-2pi * (1000 * SampleDur.ir)));
+	cricket = (
+			// changed the Q factor of the first 3 BPFs to approximate farnells sound
+			BPF.ar(cricket, 4500 + ((0..2)*50), 300.reciprocal, 100)).sum
+			+ BPF.ar(cricket, 9000, 500.reciprocal, 42
+	);
+	cricket = ((cricket - OnePole.ar(cricket, exp(-2pi * (4000 * SampleDur.ir)))) * 0.5);
+			Out.ar(out, Pan2.ar(cricket*env*amp) );
+			Out.ar(recout, cricket*env*amp );
+		}).store;
+
+SynthDef(\cicada_3calls, {|out=0 recout=100 tfreqBus amp=1 gate=1|
+	var tfreq, env, sig, trig, seq, freq, mul, vals;
+	tfreq = In.kr(tfreqBus, 1);
+	env = EnvGen.ar(Env.adsr(15,0.0,1,15),gate, doneAction: 2);
+
+	trig = Impulse.kr(tfreq);
+	vals = [
+		[0.5, 128],
+		[8,6],
+		[30,3]
+	];
+	freq = TChoose.kr(trig, vals);
+
+
+	sig = WhiteNoise.ar;
+	// The one pole filters in pure data and SC differ, so I changed the coefficents
+	// a little. Also the  multiplication by 5 is not in the book, but helps to
+	// approach the audible result of Farnells patch.
+	sig = (sig - OnePole.ar(sig, exp(-2pi * (8000 * SampleDur.ir))));
+	sig = (sig - OnePole.ar(sig, exp(-2pi * (8000 * SampleDur.ir))));
+	sig = OnePole.ar(sig, exp(-2pi * (10000 * SampleDur.ir)));
+	sig = OnePole.ar(sig, exp(-2pi * (10000 * SampleDur.ir)));
+	sig = sig * 5;
+
+
+	sig = BPF.ar(sig, [7500, 5500], 40.reciprocal).sum * SinOsc.ar(500);
+	sig = sig * (1 / (SinOsc.ar( freq[0], 0, freq[1] ).squared + 1));
+	sig = (sig - OnePole.ar(sig, exp(-2pi * (4000 * SampleDur.ir)))) * 4;
+
+			Out.ar(out, sig*env*amp);
+			Out.ar(recout, sig*env*amp);
+		}).store;
+
+/*perc synths */
+SynthDef(\perc, {|out=0 freq=440 amp=0.5 release=0.2 bufnum pan=0 phasemIndexBus|
+	var env, sig,phasemIndex;
+	phasemIndex = In.kr(phasemIndexBus, 1);
+	env = EnvGen.ar(Env.perc(0.001, release),doneAction: 2);
+	//sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum), 1, 0,0);
+	sig = SinOsc.ar(freq, LFSaw.kr(LFNoise0.kr(16.8).range(0.1,85.0),mul:phasemIndex).range(-2pi,2pi),0.5);
+	Out.ar(out, sig*env*amp); }).store;
+
+SynthDef(\perc2, {|out=0 freq=440 ffreq=1 fmIndex=1 amp=0.5 release=1 dur=3 bufnum pan=0 phasemIndexBus|
+	var env, sig,phasemIndex, fmod,gate;
+	gate = EnvGen.kr(Env([1,0],[dur]),1);
+	phasemIndex = In.kr(phasemIndexBus, 1);
+	env = EnvGen.ar(Env.adsr(0.01,0.0,1,release),gate,doneAction: 2);
+	fmod = SinOsc.kr(freq,0,fmIndex);
+			sig = SinOsc.ar(freq*fmod);
+	//sig = Saw.ar(freq*fmod,0.5);
+	//sig = VarSaw.ar([freq*0.8*fmod,freq*1*fmod,freq*1.2*fmod],[-0.25,0,0.25],SinOsc.kr(LFNoise0.kr(0.4).range(0.1,85.0)).range(0.1,0.9)!3,0.2);
+	sig = Mix(sig);
+	sig = LPF.ar(sig, 800);
+	Out.ar(out, sig*env*amp); }).store;
+
+
+
 
 ~chineScale = [ Scale.chinese(\pythagorean); ];
 
