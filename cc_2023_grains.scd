@@ -414,9 +414,9 @@ if ( ~recButtons[i][j] == 1, {
 				{ if ( ~inSelector1 != 3,
 					{ ~inSelector1 = ~inSelector1 + 1; }, { ~inSelector1 = 0; });
 					case
-					{ ~inSelector1 == 0 } { "input 0".postln; ~selectInputs.put(0, 0);
+					{ ~inSelector1 == 0 } { "input recorder input 2".postln; ~selectInputs.put(0, 2);
 						~firstgeneration_grainsample1 = {   ~bike0smpls[~samNum1];    }; }
-					{ ~inSelector1 == 1 } { "input 1".postln; ~selectInputs.put(0, 1); }
+					{ ~inSelector1 == 1 } { "input 1".postln; ~selectInputs.put(0, 0); }
 					{ ~inSelector1 == 2 } { "input electronics".postln; ~selectInputs.put(0, ~anaBus); }
 				{ ~inSelector1 == 3 } { "input 3, radio".postln; ~selectInputs.put(0, 4); };
 
@@ -449,7 +449,7 @@ if ( ~recButtons[i][j] == 1, {
 		{ num == 17 }
 				{ if ( ~inSelector2 !=3, { ~inSelector2 = ~inSelector2 + 1; }, { ~inSelector2 = 0; });
 					case
-					{ ~inSelector2 == 0 } { "input 0".postln; ~selectInputs.put(1, 0);
+					{ ~inSelector2 == 0 } { "input 2 recorder".postln; ~selectInputs.put(1, 2);
 						~firstgeneration_grainsample2 = {   ~bike1smpls[~samNum2];    };
 					}
 					{ ~inSelector2 == 1 } { "input 1 ".postln; ~selectInputs.put(1, 1); }

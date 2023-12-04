@@ -114,14 +114,14 @@ SynthDef('granulator', {|
 		input * \dry.kr(0.01)
 	]) * outAmp;
 
-	signal = signal * env * amp;
+	signal = signal * env * amp * 1.5;
 	signal = Mix(signal);
 				Out.ar(out, Pan2.ar(signal, SinOsc.kr(0.1).range(-0.8,-0.1)));
 				Out.ar(out, Pan2.ar(PitchShift.ar(signal.tanh, 0.2, SinOsc.kr(0.01).range(0.88,0.99),LFNoise1.kr(0.4).range(0.15,0.6),LFNoise0.kr(0.2).range(0.1,0.5)), SinOsc.kr(0.15).range(0.8,0.1)));
 
 				//Out.ar(out, [signal, PitchShift.ar(signal, 0.2, SinOsc.kr(0.01).range(0.91,0.99),0.1,0.1)] );
 
-}).add;
+}).store;
 
 SynthDef(\extreme_grainsampler, {|anaBus out amp envbuf bufnum rate=1 transpose=1 freq realFreq dur=0.1 overlap=1 pos|
 	var freqRatio, env, sig;
@@ -129,7 +129,7 @@ SynthDef(\extreme_grainsampler, {|anaBus out amp envbuf bufnum rate=1 transpose=
 	freqRatio = (freq/realFreq);
 	env = Osc1.ar(envbuf, dur*overlap);
 				sig = PlayBuf.ar(1, bufnum, BufRateScale.kr(bufnum)*rate*transpose,1,BufFrames.ir(bufnum)*pos,loop:1);
-	sig = sig * env * amp;
+	sig = sig * env * amp * 1.6;
 				Out.ar(out, Pan2.ar(sig, Rand(-0.3,0.3)) );
 	//Out.ar(anaBus, sig);
 }).store;
@@ -215,9 +215,9 @@ SynthDef(\field_grain, { |out=0, gate = 1, amp = 0.4,posBus,bufnum, envbuf, trat
 
 ~combPerc = Synth(\perc_effect, [\in, ~percBus], ~percGroup, \addAfter);
 
-~field_rec_files = "/home/numina/repos/chirp.crush_tour2023/AE_Samples/*.wav".pathMatch;
+~field_rec_files = "/home/numina/repos/chirp.crush_tour2023/AE_Samples/Stereo/*.wav".pathMatch;
 ~field_recs = ~field_rec_files.collect({|sample| Buffer.read(s, sample); });
-~grainfield_recs = ~field_rec_files.collect({|sample| Buffer.readChannel(s, sample, channels: [0] ); });
+~grainfield_recs = "/home/numina/repos/chirp.crush_tour2023/AE_Samples/Mono/*.wav".pathMatch;
 
 ~fieldsample_select = 0;
 
@@ -268,7 +268,7 @@ OSCdef(\btn_0, {|msg, time, addr, recvPort|
 			{
 
 
-				Synth(\granulator, [\bufnum, ~field_recs[~fieldrecnum] ], ~granulatorGroup);
+				Synth(\granulator, [\bufnum, ~sample_choose], ~granulatorGroup);
 				//Synth(\fm7, [\gate,1], ~fm1Group);
 
 								}
@@ -343,28 +343,28 @@ OSCdef(\btn_1, {|msg, time, addr, recvPort|
 
 						~grain_routine =
 						Routine({ inf.do{
-							Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~grainfield_recs[~fieldrecnum],
+							Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~sample_choose,
 									\rate, ~grain_rate, \dur, ~grain_dur, \pos, ~grain_pos ], ~grains_group);
 								0.25.wait;
 						if ( ~second_grain_gate == 1, {
-									Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~grainfield_recs[~fieldrecnum],
+									Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~sample_choose,
 									\rate, ~grain_rate,\transpose, ~grains2_transpose, \dur, ~grain_dur,\overlap, 1.1, \pos, ~grain_pos ], ~grains_group);
 								0.125.wait;
-								Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~grainfield_recs[~fieldrecnum],
+								Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~sample_choose,
 									\rate, ~grain_rate,\transpose, ~grains2_transpose, \dur, ~grain_dur,\overlap, 1.1, \pos, ~grain_pos ], ~grains_group);
 								0.125.wait;
 								});
 						if ( ~third_grain_gate == 1, {
-									Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~grainfield_recs[~fieldrecnum],
+									Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~sample_choose,
 									\rate, ~grain_rate,\transpose, ~grains3_transpose, \dur, ~grain_dur,\overlap, 0.9, \pos, ~grain_pos ], ~grains_group);
 								0.0625.wait;
-									Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~grainfield_recs[~fieldrecnum],
+									Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~sample_choose,
 									\rate, ~grain_rate,\transpose, ~grains3_transpose, \dur, ~grain_dur,\overlap, 0.9, \pos, ~grain_pos ], ~grains_group);
 								0.0625.wait;
-									Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~grainfield_recs[~fieldrecnum],
+									Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~sample_choose,
 									\rate, ~grain_rate,\transpose, ~grains3_transpose, \dur, ~grain_dur,\overlap, 0.9, \pos, ~grain_pos ], ~grains_group);
 								0.0625.wait;
-									Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~grainfield_recs[~fieldrecnum],
+									Synth(\extreme_grainsampler, [\out, ~grain_bus, \envbuf, ~otherenv, \amp, 0.75, \bufnum,~sample_choose,
 									\rate, ~grain_rate,\transpose, ~grains3_transpose, \dur, ~grain_dur,\overlap, 0.9, \pos, ~grain_pos ], ~grains_group);
 								0.0625.wait;
 								});
@@ -798,11 +798,12 @@ OSCdef(\btn_8, {|msg, time, addr, recvPort|
 ~sample_choose = ~grainfield_recs[~fieldrecnum];
 
 		OSCdef(\btn_9, {|msg, time, addr, recvPort|
-
+			//"btn9".postln;
 		if ( ~bangGates[9] == 0, {
+				"bang gate true".postln;
 
 			~bangGates.put(9, 1);
-		if ( msg[9] == 1, {
+		if ( msg[1] == 1, {
 
 					if ( ~sample_switch != 2, { ~sample_switch = ~sample_switch + 1; }, {
 						~sample_switch = 0; });
@@ -919,7 +920,7 @@ OSCdef(\abs_throttle, {|msg, time, addr, recvPort|
 
 
 Ndef(\sjoerd_in, {
-	var sig = SoundIn.ar(0)*0.1;
+	var sig = SoundIn.ar(0)*0.0001;
 
 	sig = HPF.ar(sig, 35);
 	//sig = MidEQ.ar(sig,230,0.6,-8);

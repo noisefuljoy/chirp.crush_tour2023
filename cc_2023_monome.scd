@@ -36,9 +36,6 @@ fork{
 	/* CHECK THIS ONE */
 ~footpedal_srcid = 8454144;
 
-
-
-
 ~radio_files = "/home/numina/repos/electromagnetic_sensibility/Radio/*.wav".pathMatch;
 ~radio_samples = ~radio_files.collect{|i| Buffer.read(s, i); };
 
@@ -62,17 +59,44 @@ SynthDef(\minilogue, {|out=0 amp=0.25 freq=440 dur=0.25 rel=0.1 widthMod=0.01 re
 	Out.ar(out, sig*amp*env) }).add;
 */
 
-SynthDef(\minilogue, {|out amp=0.0 gate=1 gate2=1 freq=110 index=0.1|
-		var t_env,env, modfreq,sig;
+SynthDef(\minilogue, {|out1 out2 amp=0.0 gate=1 gate2=1 freq=110 index=0.1|
+		var t_env,env,f_env, modfreq,sig,sig2;
 		t_env = EnvGen.kr(Env.adsr(0.001,0.0,1,0.00001),gate2);
-		env = EnvGen.ar(Env.adsr(0.001,0.0,1,Rand(0.01,0.4)),gate,doneAction: 2);
+		env = EnvGen.ar(Env.adsr(5.0,0.0,1,Rand(6.0,9.0)),gate,doneAction: 2);
+		f_env = EnvGen.kr(Env.adsr(5.0,0.0,1,6.0),gate,doneAction: 0);
 		modfreq = SinOsc.ar(freq*(4/3)) * freq * index;
 		sig = SinOsc.ar(freq+modfreq, 0, 0.25);
 		//sig = VarSaw.ar(freq+modfreq, 0,0.9, 0.1);
 		sig = Gate.ar(sig, gate2);
-		sig = HPF.ar(sig * env, freq: freq * 0.5);
-		Out.ar(out, sig*amp); }).store;
+		//sig = HPF.ar(sig * env, freq: freq * 0.5);
+		sig = BMoog.ar(sig, f_env*(freq*2),0.3,1,0.8,0.5);
+		sig2 = PitchShift.ar(sig, 0.2,Rand(1.05,1.15),Rand(0.01,0.2),Rand(0.0,0.15));
+		Out.ar(out1, sig*amp*env);
+		Out.ar(out2, sig2*amp*env);
+	}).store;
 
+
+SynthDef(\aether_whitenoise, {|out=0 bfreq=440 gate=1|
+
+	var env, filtenv, base_sig, sig1, sig2;
+	filtenv = EnvGen.kr(Env.adsr(4.0,0.0,1.0,20.0), gate);
+	env = EnvGen.ar(Env.adsr(6.0,0.0,1.0,20.0),gate, doneAction: 2);
+	base_sig = WhiteNoise.ar(0.01);
+	sig1 = BMoog.ar(base_sig, SinOsc.kr(LFNoise0.kr(0.3).range(0.001,0.1)).range(4000,9000),0.4, 0, 0.8);
+	sig1 = BBandPass.ar(sig1, SinOsc.kr(0.05).range(bfreq, bfreq*1.5), 8.0);
+	sig1 = BLPF.ar(sig1, 4, bfreq*2.8);
+	sig1 = (CombN.ar(sig1, 0.4, 0.4,2) * 0.4) + (sig1 * 0.5);
+	sig2 = BMoog.ar(base_sig, SinOsc.kr(LFNoise0.kr(0.2).range(0.001,0.075)).range(3200,9500),0.4, 0, 0.8);
+	sig2 = BBandPass.ar(sig2, SinOsc.kr(0.025).range(bfreq*0.9, bfreq*1.75), 9.0);
+	sig2 = BLPF.ar(sig2, 4, bfreq*3.2);
+	sig2 = (CombN.ar(sig2, 0.4, 0.35,3.5) * 0.4) + (sig2 * 0.5);
+		sig1 = BMoog.ar(sig1, (filtenv*9000)+60, 0.1,0,0.4);
+		sig2 = BMoog.ar(sig2, (filtenv*9200)+60, 0.15,0,0.3);
+		Out.ar(out, Pan2.ar(sig1, SinOsc.kr(LFNoise2.kr(0.3).range(0.01,0.1)).range(-0.8,0.1)));
+		Out.ar(out, Pan2.ar(sig2, SinOsc.kr(LFNoise2.kr(0.4).range(0.001,0.05)).range(0.8,-0.1)));
+
+
+}).store;
 
 
 /*
@@ -86,7 +110,7 @@ SynthDef(\mini_delay, {|in deltime amp=1 decay=5 out|
 		sig = (drysig*0.1) + (sig * 1);
 		Out.ar(out, Pan2.ar(sig*amp,0)); }).store;
 */
-SynthDef(\mini_delay, {|in out=0 delmod=0.001 dec=8 mix=0.25|
+SynthDef(\mini_delay, {|in out=0 delmod=0.001 dec=8 mix=0.25 pan=0|
 		var sig,delsig;
 		sig = In.ar(in, 1);
 
@@ -102,7 +126,7 @@ SynthDef(\mini_delay, {|in out=0 delmod=0.001 dec=8 mix=0.25|
 		sig = (delsig * mix) + (sig * ( 1 - mix) );
 
 		//sig = LPF.ar(sig, 800);
-		Out.ar(out, sig!2 ); }).add;
+		Out.ar(out, Pan2.ar(sig, SinOsc.kr(LFNoise0.kr(0.2).range(0.001,0.5)).range(pan, pan+0.6) ) ); }).store;
 
 SynthDef(\radiograin, { |envbuf bufnum freq = 440, amp = 0.75, t_trig = 0, decay, rate=1|
 
@@ -131,11 +155,16 @@ MIDIIn.connectAll;
 ~monome_synth_gates = Array.fill(128, { 0 });
 ~rhythmic_gate = 0;
 
+~whitenoise_synth_group = Array.fill(128, { Group.new(~maingroup); });
+~whitenoise_synth_arr = Array.fill(128, { nil } );
+
 ~index_spec = [0.1, 100.0,\exp,0.001].asSpec;
 
 
-~mini_delay_bus = Bus.audio(s, 1);
-	Synth(\mini_delay,[\in, ~mini_delay_bus], ~effect_group);
+	~mini_delay_busjes = Array.fill(2, { Bus.audio(s, 1); });
+
+	Synth(\mini_delay,[\in, ~mini_delay_busjes[0], \pan, -0.5 ], ~effect_group);
+	Synth(\mini_delay,[\in, ~mini_delay_busjes[1], \pan,  -0.1 ], ~effect_group);
 
 ~rec_synths = Array.fill(8, { 0 });
 ~fft_bufs = Array.fill(8, { Buffer.alloc(s, 512);    });
@@ -394,7 +423,7 @@ MIDIdef.cc(\nanokontrol, {|val num chan src|
 	{
 
 
-				if ( ~monomeScene != 1, { ~monomeScene = ~monomeScene + 1; }, {   ~monomeScene = 0; });
+				if ( ~monomeScene != 2, { ~monomeScene = ~monomeScene + 1; }, {   ~monomeScene = 0; });
 
 
 				case
@@ -412,6 +441,29 @@ MIDIdef.cc(\nanokontrol, {|val num chan src|
 						~flinGrid.all(1);
 						0.05.wait;
 						~monome_synth_arr.do{|item, i| var column, row; [i, item].postln;
+						if ( item != nil, {
+								column = i%16;
+								row = (i/16).floor;
+								~flinGrid.led(column,row,15);
+
+
+
+							});
+
+						};
+					}).start;
+
+
+				}
+				{ ~monomeScene == 2 }
+
+
+
+				{
+					Task({ 0.1.wait;
+						~flinGrid.all(1);
+						0.05.wait;
+						~whitenoise_synth_arr.do{|item, i| var column, row; [i, item].postln;
 						if ( item != nil, {
 								column = i%16;
 								row = (i/16).floor;
@@ -582,7 +634,9 @@ s.waitForBoot({
 						"play synth".postln;
 
 					~monome_synth_arr.put(synthNum,
-							Synth(\minilogue, [\amp,0.1,\freq, ~quarter[(synthNum-1)+128].midicps,\out, ~mini_delay_bus ], ~monome_synth_group[synthNum-1]); );
+							Synth(\minilogue, [\amp,0.1,\freq, ~quarter[(synthNum-1)+128].midicps,
+								\out1, ~mini_delay_busjes[0],\out1, ~mini_delay_busjes[1]
+						], ~monome_synth_group[synthNum-1]); );
 
 						("synth num trigged"++synthNum).postln;
 					~flinGrid.led(x,y,15);
@@ -602,6 +656,36 @@ s.waitForBoot({
 
 				});
 
+
+			}
+			{ ~monomeScene == 2 }
+			{
+
+				if(z == 1, {
+
+					if ( ~whitenoise_synth_arr[synthNum] == nil, {
+						"play whitenoise".postln;
+
+					~whitenoise_synth_arr.put(synthNum,
+							Synth(\aether_whitenoise, [\amp,0.1,\bfreq, ~quarter[(synthNum-1)+128].midicps,\out, 0 ], ~whitenoise_synth_group[synthNum-1]); );
+
+						("synth num trigged"++synthNum).postln;
+					~flinGrid.led(x,y,15);
+					},
+					{	"stop whitenoise".postln;
+						~whitenoise_synth_arr[synthNum].set(\gate, 0);
+						~whitenoise_synth_arr.put(synthNum, nil);
+
+						~flinGrid.led(x,y,0);
+
+					});
+
+
+
+
+
+
+				});
 
 			};
 
@@ -654,6 +738,11 @@ s.waitForBoot({
 
 			}
 				{ ~monomeScene == 1 }
+				{
+					//"not drawing anymore".postln;
+
+				}
+				{ ~monomeScene == 2 }
 				{
 					//"not drawing anymore".postln;
 
@@ -733,6 +822,12 @@ s.waitForBoot({
 		}
 
 				{ ~monomeScene == 1 }
+			{
+					//"not playing".postln;
+
+			0.1.wait;
+				}
+			{ ~monomeScene == 2 }
 			{
 					//"not playing".postln;
 
